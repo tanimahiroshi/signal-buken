@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ビジネスシグナル | 物件</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="data/buildings.js" onerror="/* ファイルなし – localStorage にフォールバック */"></script>
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-spin  { animation: spin 1s linear infinite; }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    .modal-animate { animation: fadeIn 0.2s ease-out forwards; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect, useCallback, useRef } = React;
+
+    // --- アイコン ---
+    const IconBuilding = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
+        <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
+        <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
+        <path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>
+      </svg>
+    );
+    const IconAlertTriangle = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+        <path d="M12 9v4"/><path d="M12 17h.01"/>
+      </svg>
+    );
+    const IconAlertCircle = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    );
+    const IconCheckCircle = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+    );
+    const IconTrendingUp = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+        <polyline points="16 7 22 7 22 13"/>
+      </svg>
+    );
+    const IconRefresh = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/>
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+        <path d="M8 16H3v5"/>
+      </svg>
+    );
+    const IconMapPin = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+    );
+    const IconX = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+      </svg>
+    );
+    const IconUpload = ({ className }) => (
+      <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    );
+
+    // --- 組み込みサンプルデータ（デモ用・20棟） ---
+    const SAMPLE_BUILDINGS = [
+      { bn:'101', n:'鶴見区駒岡',       a:'神奈川県横浜市鶴見区駒岡3-1',             tr:24, er:1,  r:95.8, s:'safe',    d:{'トランクルーム':{t:24,e:1}},                       yr:7.2, ai:144, ap:2000, ys:'warning' },
+      { bn:'102', n:'港北区新横浜',     a:'神奈川県横浜市港北区新横浜2-5',           tr:18, er:6,  r:66.7, s:'danger',  d:{'トランクルーム':{t:18,e:6}},                       yr:5.7, ai:86,  ap:1500, ys:'warning' },
+      { bn:'103', n:'中原区上丸子',     a:'神奈川県川崎市中原区上丸子1-3',           tr:40, er:1,  r:97.5, s:'safe',    d:{'トランクルーム':{t:32,e:0},'住宅':{t:8,e:1}},      yr:9.3, ai:280, ap:3000, ys:'safe'    },
+      { bn:'104', n:'荒川区東日暮里',   a:'東京都荒川区東日暮里4-2',                  tr:20, er:5,  r:75.0, s:'danger',  d:{'トランクルーム':{t:20,e:5}},                       yr:4.5, ai:90,  ap:2000, ys:'danger'  },
+      { bn:'105', n:'大田区蒲田',       a:'東京都大田区蒲田5-8',                      tr:20, er:2,  r:90.0, s:'safe',    d:{'住宅':{t:20,e:2}},                                yr:8.7, ai:192, ap:2200, ys:'safe'    },
+      { bn:'106', n:'川崎区新川通',     a:'神奈川県川崎市川崎区新川通1-4',           tr:28, er:1,  r:96.4, s:'safe',    d:{'トランクルーム':{t:28,e:1}},                       yr:4.0, ai:201, ap:5000, ys:'danger'  },
+      { bn:'107', n:'台東区北上野',     a:'東京都台東区北上野2-6',                    tr:20, er:2,  r:90.0, s:'safe',    d:{'トランクルーム':{t:16,e:2},'住宅':{t:4,e:0}},      yr:8.8, ai:132, ap:1500, ys:'safe'    },
+      { bn:'108', n:'相模原市中央区',   a:'神奈川県相模原市中央区相模原2-1',          tr:40, er:8,  r:80.0, s:'warning', d:{'トランクルーム':{t:40,e:8}},                       yr:4.8, ai:168, ap:3500, ys:'danger'  },
+      { bn:'109', n:'新宿区西新宿',     a:'東京都新宿区西新宿8-3',                    tr:12, er:0,  r:100,  s:'safe',    d:{'住宅':{t:12,e:0}},                                yr:8.6, ai:216, ap:2500, ys:'safe'    },
+      { bn:'110', n:'横浜市西区',       a:'神奈川県横浜市西区北幸1-2',               tr:28, er:3,  r:89.3, s:'warning', d:{'トランクルーム':{t:22,e:3},'住宅':{t:6,e:0}},      yr:7.7, ai:201, ap:2600, ys:'warning' },
+      { bn:'111', n:'越谷市南越谷',     a:'埼玉県越谷市南越谷4-1',                    tr:36, er:4,  r:88.9, s:'warning', d:{'トランクルーム':{t:36,e:4}},                       yr:8.0, ai:192, ap:2400, ys:'safe'    },
+      { bn:'112', n:'千葉市中央区',     a:'千葉県千葉市中央区富士見2-3',             tr:28, er:7,  r:75.0, s:'danger',  d:{'トランクルーム':{t:28,e:7}},                       yr:5.3, ai:105, ap:2000, ys:'warning' },
+      { bn:'113', n:'練馬区光が丘',     a:'東京都練馬区光が丘3-8',                    tr:16, er:3,  r:81.3, s:'warning', d:{'住宅':{t:16,e:3}},                                yr:7.7, ai:115, ap:1500, ys:'warning' },
+      { bn:'114', n:'品川区大井',       a:'東京都品川区大井5-2',                      tr:20, er:0,  r:100,  s:'safe',    d:{'トランクルーム':{t:20,e:0}},                       yr:9.0, ai:180, ap:2000, ys:'safe'    },
+      { bn:'115', n:'墨田区錦糸町',     a:'東京都墨田区錦糸3-12',                     tr:24, er:11, r:54.2, s:'danger',  d:{'トランクルーム':{t:24,e:11}},                      yr:4.0, ai:72,  ap:1800, ys:'danger'  },
+      { bn:'116', n:'立川市錦町',       a:'東京都立川市錦町6-4',                      tr:24, er:2,  r:91.7, s:'safe',    d:{'住宅':{t:24,e:2}},                                yr:8.4, ai:201, ap:2400, ys:'safe'    },
+      { bn:'117', n:'川口市青木',       a:'埼玉県川口市青木4-3',                      tr:40, er:6,  r:85.0, s:'warning', d:{'トランクルーム':{t:32,e:5},'住宅':{t:8,e:1}},      yr:8.2, ai:181, ap:2200, ys:'safe'    },
+      { bn:'118', n:'横浜市鶴見区豊岡', a:'神奈川県横浜市鶴見区豊岡町12-8',          tr:20, er:4,  r:80.0, s:'warning', d:{'トランクルーム':{t:20,e:4}},                       yr:6.0, ai:96,  ap:1600, ys:'warning' },
+      { bn:'119', n:'さいたま市大宮',   a:'埼玉県さいたま市大宮区桜木町2-1',          tr:18, er:5,  r:72.2, s:'danger',  d:{'住宅':{t:18,e:5}},                                yr:5.6, ai:100, ap:1800, ys:'warning' },
+      { bn:'120', n:'川崎市幸区',       a:'神奈川県川崎市幸区小向東芝町1-2',          tr:48, er:1,  r:97.9, s:'safe',    d:{'トランクルーム':{t:48,e:1}},                       yr:8.8, ai:336, ap:3800, ys:'safe'    },
+    ];
+
+    const getUsageMeta = (usage) => {
+        switch (usage) {
+            case '住宅': return { emoji: '🏠' };
+            case '店舗・事務所': return { emoji: '🏪' };
+            case 'トランクルーム': return { emoji: '📦' };
+            case 'コンテナ': return { emoji: '📦' };
+            case 'マンスリー': return { emoji: '🧳' };
+            case 'ゲスト': return { emoji: '🛏️' };
+            case 'サブリース': return { emoji: '🏢' };
+            default: return { emoji: '📌' };
+        }
+    };
+
+    function sortBuildingsByRateLowFirst(list) {
+      return [...list].sort((a, b) => {
+        const aN = a.rate != null && !isNaN(a.rate) ? a.rate : null;
+        const bN = b.rate != null && !isNaN(b.rate) ? b.rate : null;
+        if (aN === null && bN !== null) return 1;
+        if (aN !== null && bN === null) return -1;
+        if (aN === null && bN === null) return 0;
+        return aN - bN;
+      });
+    }
+
+    function sortByYieldLowFirst(list) {
+      return [...list].sort((a, b) => {
+        const aN = a.yieldRate != null && !isNaN(a.yieldRate) ? a.yieldRate : null;
+        const bN = b.yieldRate != null && !isNaN(b.yieldRate) ? b.yieldRate : null;
+        if (aN === null && bN !== null) return 1;
+        if (aN !== null && bN === null) return -1;
+        if (aN === null && bN === null) return 0;
+        return aN - bN;
+      });
+    }
+
+    // --- ビルカード ---
+    function BuildingCard({ building, style, onSelect, viewMode }) {
+      const isYield = viewMode === 'yield';
+      const value = isYield ? building.yieldRate : building.rate;
+      const valueDisplay = value === null || value === undefined ? '—' : value.toFixed(1);
+      const valueUnit = value !== null && value !== undefined ? '%' : '';
+
+      return (
+        <div
+          onClick={() => onSelect(building)}
+          className={`relative overflow-hidden flex flex-col p-3 rounded-lg border shadow-sm transition-transform hover:scale-105 cursor-pointer
+            ${style.bgColor} ${style.borderColor}`}
+        >
+          {style.label.includes('危険') || style.label.includes('低利回り') ? <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div> : null}
+          <div className="flex justify-between items-start gap-1 mb-2 mt-1 min-h-[1.25rem]">
+            <span className="text-[10px] leading-tight font-semibold text-slate-500 truncate">
+              {building.buildingNo ? (
+                <><span className="text-slate-400 font-medium mr-0.5">物件番号</span> {building.buildingNo}</>
+              ) : (
+                <span className="invisible">—</span>
+              )}
+            </span>
+            <span className={`w-3 h-3 rounded-full inline-block shrink-0 ${style.dot} ${style.glow ? 'animate-pulse' : ''}`} title={style.label}></span>
+          </div>
+          <div className="font-bold text-slate-800 text-sm mb-1 truncate">{building.name}</div>
+          <div className={`mt-auto text-lg font-black ${style.color}`}>
+            {valueDisplay}<span className="text-xs font-normal ml-0.5">{valueUnit}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 複合リスク（稼働・利回り 両方赤）一覧モーダル ---
+    function CompoundRiskModal({ buildings, onClose, onSelectDetail }) {
+      const fmt = (v) => (v === null || v === undefined || (typeof v === 'number' && isNaN(v))) ? '—' : Number(v).toFixed(1);
+      const go = (b, mode) => { onSelectDetail(b, mode); onClose(); };
+      return (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[min(90vh,640px)] modal-animate"
+          >
+            <div className="relative bg-[#FFF1F1] px-5 pt-5 pb-4 shrink-0 rounded-t-xl">
+              <button
+                type="button"
+                onClick={onClose}
+                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-black/5 transition-colors"
+                aria-label="閉じる"
+              >
+                <IconX className="w-5 h-5" />
+              </button>
+              <div className="flex items-start gap-2.5 pr-10">
+                <span className="w-3 h-3 rounded-full bg-red-500 shrink-0 mt-1" />
+                <div>
+                  <h2 className="text-base font-bold text-red-800 leading-snug">稼働率・利回り 両方赤の物件</h2>
+                  <p className="text-sm text-red-600 mt-1.5">行の「稼働」→稼働率の詳細、「利回り」→利回りの詳細に開きます。</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-3 overflow-y-auto no-scrollbar flex-1 bg-white min-h-0">
+              {buildings.length === 0 ? (
+                <p className="text-center text-slate-400 py-10 text-sm">該当するビルはありません。</p>
+              ) : (
+                buildings.map((b) => (
+                  <div
+                    key={b.id}
+                    className="mb-2 last:mb-0 p-3 rounded-lg border border-red-200/80 bg-[#FFF5F5] flex justify-between gap-3 transition-colors"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => go(b, 'occupancy')}
+                      className="min-w-0 flex-1 text-left cursor-pointer rounded-md -m-1 p-1 hover:bg-red-100/50 focus:outline-none focus:ring-2 focus:ring-red-300"
+                    >
+                      <div className="text-[10px] text-slate-500 mb-0.5">
+                        {b.buildingNo != null && b.buildingNo !== '' ? `No.${b.buildingNo}` : b.id}
+                      </div>
+                      <div className="font-bold text-slate-900 text-sm break-words">{b.name}</div>
+                      <p className="text-xs text-slate-500 flex items-start gap-1 mt-0.5">
+                        <IconMapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                        <span>{b.address || '所在地情報なし'}</span>
+                      </p>
+                    </button>
+                    <div className="shrink-0 text-right text-sm font-semibold text-red-600 leading-snug flex flex-col justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => go(b, 'occupancy')}
+                        className="block w-full pl-2 py-0.5 rounded cursor-pointer text-red-600 hover:bg-red-100/80 focus:outline-none focus:ring-2 focus:ring-red-300"
+                        title="稼働率で詳細を開く"
+                      >
+                        稼働 {fmt(b.rate)}%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => go(b, 'yield')}
+                        className="block w-full pl-2 py-0.5 rounded cursor-pointer text-red-600 hover:bg-red-100/80 focus:outline-none focus:ring-2 focus:ring-red-300"
+                        title="利回りで詳細を開く"
+                      >
+                        利回り {fmt(b.yieldRate)}%
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 詳細ポップアップモーダル ---
+    function BuildingModal({ building, style, onClose, viewMode, onViewModeChange }) {
+      if (!building) return null;
+
+      const isYield = viewMode === 'yield';
+      const details = building.details || { '情報なし': { total: building.totalRooms || 0, empty: building.emptyRooms || 0 } };
+      const totalRooms = building.totalRooms || 0;
+      const emptyRooms = building.emptyRooms || 0;
+      const activeRooms = totalRooms - emptyRooms;
+
+      const occupancyDisplay = building.rate === null || building.rate === undefined ? '—' : building.rate.toFixed(1);
+      const yieldDisplay = building.yieldRate === null || building.yieldRate === undefined ? '—' : building.yieldRate.toFixed(1);
+      const mainDisplay = isYield ? yieldDisplay : occupancyDisplay;
+      const mainUnit = (isYield ? building.yieldRate : building.rate) !== null ? '%' : '';
+
+      return (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden modal-animate"
+          >
+            <div className={`p-5 border-b border-slate-200 relative ${style.bgColor}`}>
+                <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 hover:bg-black/5 rounded-md p-1 transition-colors">
+                    <IconX className="w-5 h-5" />
+                </button>
+                <div className="flex flex-wrap items-center gap-2 mb-2 pr-8">
+                    {building.buildingNo && (
+                      <span className="text-xs font-mono font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded border border-slate-300">
+                        物件番号 {building.buildingNo}
+                      </span>
+                    )}
+                    <span className={`text-sm font-bold flex items-center gap-1 ${style.color}`}>
+                        {style.icon}{style.label}
+                    </span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-1">{building.name}</h3>
+                <p className="text-sm text-slate-600 flex items-center gap-1.5">
+                    <IconMapPin className="w-3.5 h-3.5 text-slate-400" />
+                    {building.address || '所在地情報なし'}
+                </p>
+            </div>
+
+            <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto no-scrollbar">
+
+              {onViewModeChange && (
+                <div className="flex items-center gap-2 flex-wrap -mt-0.5 pb-1 border-b border-slate-100">
+                  <span className="text-xs text-slate-500 font-medium shrink-0">表示:</span>
+                  <div className="flex bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onViewModeChange('occupancy')}
+                      className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${!isYield ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      📊 稼働率
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onViewModeChange('yield')}
+                      className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${isYield ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      💰 利回り
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 稼働率モード: サマリー */}
+              {!isYield && (
+                <>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">【 稼働率サマリー 】</h4>
+                    <div className="flex items-center border border-slate-200 rounded-lg p-4 bg-slate-50">
+                      <div className="w-1/2 border-r border-slate-300 flex justify-center items-center pr-4">
+                        <p className={`text-4xl font-black ${style.color}`}>
+                          {mainDisplay}<span className="text-xl font-bold">{mainUnit}</span>
+                        </p>
+                      </div>
+                      <div className="w-1/2 pl-6 space-y-1.5">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">総戸数:</span>
+                          <span className="font-mono font-bold text-slate-800">{totalRooms}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">稼働中:</span>
+                          <span className="font-mono font-bold text-slate-800">{activeRooms}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">空室数:</span>
+                          <span className="font-mono font-bold text-red-600">{emptyRooms}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {totalRooms > 0 ? (
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 mb-3">【 用途別の稼働状況 】</h4>
+                      <div className="space-y-4">
+                        {Object.entries(details).map(([usage, data]) => {
+                          if (data.total === 0) return null;
+                          const usageRate = ((data.total - data.empty) / data.total) * 100;
+                          let barColor = 'bg-emerald-500', statusLabel = '🟢順調', labelColor = 'text-emerald-600';
+                          if (usageRate < 70) { barColor = 'bg-red-500'; statusLabel = '🔴危険'; labelColor = 'text-red-600'; }
+                          else if (usageRate < 90) { barColor = 'bg-yellow-400'; statusLabel = '🟡注意'; labelColor = 'text-yellow-600'; }
+                          return (
+                            <div key={usage} className="text-sm">
+                              <div className="flex justify-between items-end mb-1">
+                                <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                                  {getUsageMeta(usage).emoji} {usage}
+                                </span>
+                                <span className="text-slate-600 font-mono text-xs">
+                                  空き <span className={data.empty > 0 ? "font-bold text-red-600 text-sm" : "font-bold text-sm"}>{data.empty}</span> / {data.total}
+                                  <span className="inline-block w-12 text-right font-bold ml-3 text-slate-800 text-sm">{usageRate.toFixed(0)}%</span>
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 bg-slate-200 rounded h-2.5 overflow-hidden">
+                                  <div className={`${barColor} h-full rounded transition-all duration-700`} style={{ width: `${usageRate}%` }}></div>
+                                </div>
+                                <span className={`text-xs font-bold w-14 ${labelColor}`}>{statusLabel}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-400 bg-slate-50 rounded-lg border border-slate-100">
+                      <p>用途別の空室データがありません</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 利回りモード: 収益サマリー */}
+              {isYield && (
+                <>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">【 利回りサマリー 】</h4>
+                    <div className="flex items-center border border-slate-200 rounded-lg p-4 bg-slate-50">
+                      <div className="w-1/2 border-r border-slate-300 flex justify-center items-center pr-4">
+                        <div className="text-center">
+                          <p className={`text-4xl font-black ${style.color}`}>
+                            {yieldDisplay}<span className="text-xl font-bold">{building.yieldRate !== null ? '%' : ''}</span>
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">表面利回り</p>
+                        </div>
+                      </div>
+                      <div className="w-1/2 pl-6 space-y-1.5">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">年間賃料収入:</span>
+                          <span className="font-mono font-bold text-slate-800">{formatMan(building.annualIncome)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">取得価格:</span>
+                          <span className="font-mono font-bold text-slate-800">{formatMan(building.acqPrice)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">月額換算:</span>
+                          <span className="font-mono font-bold text-slate-800">{formatMan(building.annualIncome != null ? Math.round(building.annualIncome / 12) : null)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-2">【 稼働率（参考） 】</h4>
+                    <div className="flex items-center gap-4 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                      <div className="text-center w-20 shrink-0">
+                        <p className={`text-2xl font-black ${building.status === 'danger' ? 'text-red-600' : building.status === 'warning' ? 'text-yellow-600' : 'text-emerald-600'}`}>
+                          {occupancyDisplay}{building.rate !== null ? '%' : ''}
+                        </p>
+                        <p className="text-xs text-slate-400">稼働率</p>
+                      </div>
+                      <div className="flex-1 space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">総戸数:</span>
+                          <span className="font-mono font-bold">{totalRooms}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">空室数:</span>
+                          <span className={`font-mono font-bold ${emptyRooms > 0 ? 'text-red-600' : ''}`}>{emptyRooms}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 億・万円フォーマット ---
+    function formatMan(man) {
+      if (man == null) return '—';
+      const fmt = (n) => n.toLocaleString('ja-JP');
+      if (man >= 10000) {
+        const oku = Math.floor(man / 10000);
+        const sen = man % 10000;
+        return sen > 0 ? `${fmt(oku)}億${fmt(sen)}万円` : `${fmt(oku)}億円`;
+      }
+      return `${fmt(man)}万円`;
+    }
+
+    // --- Excel解析ヘルパー ---
+    function parseExcelNumber(val) {
+      if (val == null || val === '') return 0;
+      if (typeof val === 'number') return val;
+      const num = Number(String(val).replace(/,/g, '').trim());
+      return isNaN(num) ? 0 : num;
+    }
+
+    function usageLabelFromHeader(header, kind) {
+      let s = String(header).replace(/\u3000/g, ' ').trim();
+      if (kind === 'total') s = s.replace(/総戸数・|総戸数|総区画数|戸数/gi, '').trim();
+      else                  s = s.replace(/空き数・|空き数|空室数|空室|空き/gi, '').trim();
+      return s;
+    }
+
+    function buildTotalVacantPairs(headers, totalCols, vacantCols) {
+      const pairs = [];
+      const usedVac = new Set();
+      if (totalCols.length === vacantCols.length) {
+        for (let i = 0; i < totalCols.length; i++) {
+          const usage = usageLabelFromHeader(headers[totalCols[i]], 'total')
+                     || usageLabelFromHeader(headers[vacantCols[i]], 'vacant')
+                     || (totalCols.length === 1 ? '全体' : `用途${i + 1}`);
+          pairs.push({ usage, tc: totalCols[i], vc: vacantCols[i] });
+        }
+        return pairs;
+      }
+      for (const tc of totalCols) {
+        const lt = usageLabelFromHeader(headers[tc], 'total');
+        const vc = vacantCols.find(v => {
+          if (usedVac.has(v)) return false;
+          const lv = usageLabelFromHeader(headers[v], 'vacant');
+          return lt && lv && lt === lv;
+        });
+        if (vc !== undefined) { usedVac.add(vc); pairs.push({ usage: lt, tc, vc }); }
+      }
+      let anon = 0;
+      for (const tc of totalCols) {
+        if (pairs.some(p => p.tc === tc)) continue;
+        const vc = vacantCols.find(v => !usedVac.has(v));
+        if (vc === undefined) break;
+        usedVac.add(vc); anon++;
+        const usage = usageLabelFromHeader(headers[tc], 'total')
+                   || usageLabelFromHeader(headers[vc], 'vacant')
+                   || `区画${anon}`;
+        pairs.push({ usage, tc, vc });
+      }
+      return pairs;
+    }
+
+    function extractBuildingDataFromRows(rows) {
+      if (rows.length < 2) return [];
+      const headers  = rows[0].map(h => String(h));
+      const totalCols  = [];
+      const vacantCols = [];
+      headers.forEach((h, idx) => {
+        if (/総戸数|総区画数/.test(h)) totalCols.push(idx);
+        if (/空き数|空室数|空室/.test(h))  vacantCols.push(idx);
+      });
+      if (totalCols.length === 0 || vacantCols.length === 0) return [];
+      const pairs = buildTotalVacantPairs(headers, totalCols, vacantCols);
+      if (pairs.length === 0) return [];
+      const nameCol    = headers.findIndex(h => /物件名|建物名|名称/.test(h));
+      const addressCol = headers.findIndex(h => /住所|所在地/.test(h));
+      const noCol      = headers.findIndex(h => /物件番号/.test(h));
+      if (noCol < 0) return [];
+      // 同シート内の利回り列を探す
+      const yieldCol   = headers.findIndex(h => /利回り/.test(h));
+      const priceCol   = headers.findIndex(h => /購入価格|取得価格/.test(h));
+      const buildings = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const buildingNo = String(row[noCol] != null ? row[noCol] : '').trim();
+        const details = {};
+        let totalRooms = 0, emptyRooms = 0;
+        for (const p of pairs) {
+          const t = parseExcelNumber(row[p.tc]);
+          const e = parseExcelNumber(row[p.vc]);
+          if (t === 0) continue;
+          let key = p.usage;
+          if (details[key]) key = `${key} (${p.tc})`;
+          details[key] = { total: t, empty: e };
+          totalRooms += t; emptyRooms += e;
+        }
+        let rate = null, status = 'unknown';
+        if (totalRooms > 0) {
+          rate   = Math.round((1 - emptyRooms / totalRooms) * 1000) / 10;
+          status = rate < 70 ? 'danger' : rate < 90 ? 'warning' : 'safe';
+        }
+        // 利回りデータ（小数 0.08 → 8% に変換）
+        let yieldRate = null, yieldStatus = 'unknown', annualIncome = null, acqPrice = null;
+        if (yieldCol >= 0) {
+          const rawY = parseFloat(row[yieldCol]);
+          if (!isNaN(rawY) && rawY > 0) {
+            yieldRate = rawY < 1 ? Math.round(rawY * 1000) / 10 : Math.round(rawY * 10) / 10;
+            yieldStatus = yieldRate >= 7 ? 'safe' : yieldRate >= 4 ? 'warning' : 'danger';
+          }
+        }
+        if (priceCol >= 0) {
+          const rawP = parseExcelNumber(row[priceCol]);
+          if (rawP > 0) {
+            acqPrice     = Math.round(rawP / 10000); // 万円
+            annualIncome = yieldRate != null ? Math.round(rawP * (yieldRate / 100) / 10000) : null;
+          }
+        }
+        const name    = nameCol    >= 0 ? String(row[nameCol]    || '').trim() : String(row[2] || '');
+        const address = addressCol >= 0 ? String(row[addressCol] || '').trim() : '';
+        buildings.push({ name: name || `（物件名不明 行${i + 1}）`, rate, status, address, buildingNo, totalRooms, emptyRooms, details, yieldRate, yieldStatus, annualIncome, acqPrice });
+      }
+      return buildings;
+    }
+
+    // --- コンパクト形式 → 表示用オブジェクトに変換 ---
+    function expandBuildings(compact) {
+      return compact.map((b, i) => {
+        const bn = typeof b.bn === 'string' || typeof b.bn === 'number' ? String(b.bn) : '';
+        return {
+          id: bn ? `bn-${bn}-${i}` : `B-${String(i + 1).padStart(3, '0')}`,
+          name: b.n, rate: typeof b.r === 'number' ? b.r : null,
+          status: typeof b.s === 'string' ? b.s : 'unknown',
+          address: typeof b.a === 'string' ? b.a : '',
+          totalRooms: typeof b.tr === 'number' ? b.tr : 0,
+          emptyRooms: typeof b.er === 'number' ? b.er : 0,
+          buildingNo: bn,
+          details: b.d
+            ? Object.fromEntries(Object.entries(b.d).map(([k, v]) => [k, { total: v.t, empty: v.e }]))
+            : {},
+          yieldRate:    typeof b.yr === 'number' ? b.yr : null,
+          annualIncome: typeof b.ai === 'number' ? b.ai : null,
+          acqPrice:     typeof b.ap === 'number' ? b.ap : null,
+          yieldStatus:  typeof b.ys === 'string' ? b.ys : 'unknown',
+        };
+      });
+    }
+
+    // --- 利回りシート解析 ---
+    function extractYieldDataFromRows(rows) {
+      if (rows.length < 2) return {};
+      const headers  = rows[0].map(h => String(h));
+      const noCol    = headers.findIndex(h => /物件番号/.test(h));
+      const yieldCol = headers.findIndex(h => /利回り/.test(h));
+      const incomeCol= headers.findIndex(h => /年間賃料|賃料収入/.test(h));
+      const priceCol = headers.findIndex(h => /取得価格|購入価格/.test(h));
+      if (noCol < 0 || yieldCol < 0) return {};
+      const result = {};
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const bn  = String(row[noCol] ?? '').trim();
+        if (!bn) continue;
+        const yr  = parseFloat(row[yieldCol]);
+        const isNum = !isNaN(yr) && yr > 0;
+        result[bn] = {
+          yieldRate:    isNum ? yr : null,
+          annualIncome: incomeCol >= 0 ? parseExcelNumber(row[incomeCol]) : null,
+          acqPrice:     priceCol  >= 0 ? parseExcelNumber(row[priceCol])  : null,
+          yieldStatus:  !isNum ? 'unknown' : yr >= 7 ? 'safe' : yr >= 4 ? 'warning' : 'danger',
+        };
+      }
+      return result;
+    }
+
+    // --- データ取得（優先順: localStorage → data/buildings.js → サンプル） ---
+    function fetchData(onSuccess, onError) {
+      try {
+        // 優先①: ブラウザでアップロードしたデータ（F5後も維持）
+        const raw       = localStorage.getItem('buildingData');
+        const fileName  = localStorage.getItem('fileName')  || '';
+        const updatedAt = localStorage.getItem('updatedAt') || '';
+        if (raw) {
+          const buildings = expandBuildings(JSON.parse(raw));
+          setTimeout(() => onSuccess({ buildings, fileName, updatedAt }), 50);
+          return;
+        }
+        // 優先②: 更新.bat で生成した data/buildings.js
+        if (window.BUILDING_DATA && Array.isArray(window.BUILDING_DATA.buildings)) {
+          const { buildings: compact, fileName, updatedAt } = window.BUILDING_DATA;
+          const buildings = expandBuildings(compact);
+          setTimeout(() => onSuccess({ buildings, fileName, updatedAt }), 50);
+          return;
+        }
+        // 優先③: 組み込みサンプル
+        const buildings = expandBuildings(SAMPLE_BUILDINGS);
+        setTimeout(() => onSuccess({ buildings, fileName: 'サンプルデータ', updatedAt: '（デモ用）', isSample: true }), 50);
+      } catch (e) {
+        setTimeout(() => onError('データの読み込みに失敗しました: ' + e.message), 50);
+      }
+    }
+
+    function App() {
+      const [data, setData]         = useState(null);
+      const [filter, setFilter]     = useState('all');
+      const [viewMode, setViewMode] = useState('occupancy'); // 'occupancy' | 'yield'
+      const [loading, setLoading]   = useState(true);
+      const [error, setError]       = useState('');
+      const [refreshing, setRefreshing] = useState(false);
+      const [selectedBuilding, setSelectedBuilding] = useState(null);
+      const [uploading, setUploading]   = useState(false);
+      const [uploadMsg, setUploadMsg]   = useState(null);
+      const fileInputRef = useRef(null);
+
+      const load = useCallback((isRefresh = false) => {
+        if (isRefresh) setRefreshing(true);
+        else setLoading(true);
+        setError('');
+        fetchData(
+          (result) => {
+            if (result && !Array.isArray(result.buildings)) result = { ...result, buildings: [] };
+            setData(result);
+            setLoading(false);
+            setRefreshing(false);
+          },
+          (msg) => { setError(msg); setLoading(false); setRefreshing(false); }
+        );
+      }, []);
+
+      useEffect(() => { load(); }, [load]);
+
+      const handleFileChange = useCallback((e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = '';
+        setUploading(true);
+        setUploadMsg(null);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const data     = new Uint8Array(ev.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+            const rows     = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            const buildings = extractBuildingDataFromRows(rows);
+            if (workbook.SheetNames.length > 1) {
+              const sheet2 = workbook.Sheets[workbook.SheetNames[1]];
+              const rows2  = XLSX.utils.sheet_to_json(sheet2, { header: 1, defval: '' });
+              const yieldMap = extractYieldDataFromRows(rows2);
+              buildings.forEach(b => {
+                const yd = yieldMap[b.buildingNo] || {};
+                b.yieldRate    = yd.yieldRate    ?? null;
+                b.annualIncome = yd.annualIncome ?? null;
+                b.acqPrice     = yd.acqPrice     ?? null;
+                b.yieldStatus  = yd.yieldStatus  ?? 'unknown';
+              });
+            }
+            if (buildings.length === 0) {
+              setUploading(false);
+              setUploadMsg({ type: 'error', text: '1行目に「物件番号」「物件名」「総戸数」「空き数」を含む列が必要です。' });
+              return;
+            }
+            const compact = buildings.map(b => ({
+              n: b.name, r: b.rate, s: b.status, a: b.address,
+              tr: b.totalRooms, er: b.emptyRooms, bn: b.buildingNo,
+              d: Object.fromEntries(Object.entries(b.details).map(([k, v]) => [k, { t: v.total, e: v.empty }])),
+              yr: b.yieldRate, ai: b.annualIncome, ap: b.acqPrice, ys: b.yieldStatus,
+            }));
+            const updatedAt = new Date().toLocaleString('ja-JP');
+            localStorage.setItem('buildingData', JSON.stringify(compact));
+            localStorage.setItem('fileName',     file.name);
+            localStorage.setItem('updatedAt',    updatedAt);
+            // data/buildings.js より localStorage を優先させる
+            if (window.BUILDING_DATA) window.BUILDING_DATA = null;
+            setUploading(false);
+            setUploadMsg({ type: 'success', text: `${buildings.length}棟のデータを更新しました。` });
+            load(true);
+          } catch (err) {
+            setUploading(false);
+            setUploadMsg({ type: 'error', text: 'ファイルの読み込みに失敗しました: ' + err.message });
+          }
+        };
+        reader.onerror = () => { setUploading(false); setUploadMsg({ type: 'error', text: 'ファイルの読み込みに失敗しました。' }); };
+        reader.readAsArrayBuffer(file);
+      }, [load]);
+
+      const buildings = useMemo(() => {
+        if (!data) return [];
+        return Array.isArray(data.buildings) ? data.buildings : [];
+      }, [data]);
+
+      const counts = useMemo(() => {
+        const sf = viewMode === 'yield' ? 'yieldStatus' : 'status';
+        return {
+          total:    buildings.length,
+          danger:   buildings.filter(b => b[sf] === 'danger').length,
+          warning:  buildings.filter(b => b[sf] === 'warning').length,
+          safe:     buildings.filter(b => b[sf] === 'safe').length,
+          unknown:  buildings.filter(b => b[sf] === 'unknown').length,
+          compound: buildings.filter(b => b.status === 'danger' && b.yieldStatus === 'danger').length,
+        };
+      }, [buildings, viewMode]);
+
+      const filteredBuildings = useMemo(() => {
+        const sf = viewMode === 'yield' ? 'yieldStatus' : 'status';
+        let list;
+        if (filter === 'compound') {
+          list = buildings.filter(b => b.status === 'danger' && b.yieldStatus === 'danger');
+        } else if (filter === 'all') {
+          list = buildings;
+        } else {
+          list = buildings.filter(b => b[sf] === filter);
+        }
+        if (filter === 'all' || filter === 'compound') return list;
+        return viewMode === 'yield' ? sortByYieldLowFirst(list) : sortBuildingsByRateLowFirst(list);
+      }, [filter, buildings, viewMode]);
+
+      const occupancyStyles = {
+        danger:  { color: 'text-red-600',     bgColor: 'bg-red-50',    borderColor: 'border-red-500',   icon: <IconAlertTriangle className="w-5 h-5 text-red-600" />,   label: '危険 (<70%)',   dot: 'bg-red-500',     glow: true  },
+        warning: { color: 'text-yellow-600',  bgColor: 'bg-yellow-50', borderColor: 'border-yellow-400',icon: <IconAlertCircle   className="w-5 h-5 text-yellow-600" />,  label: '注意 (70-89%)', dot: 'bg-yellow-400',  glow: false },
+        safe:    { color: 'text-emerald-600', bgColor: 'bg-white',     borderColor: 'border-gray-200',  icon: <IconCheckCircle   className="w-5 h-5 text-emerald-500" />, label: '順調 (90%+)',   dot: 'bg-emerald-500', glow: false },
+        unknown: { color: 'text-slate-400',   bgColor: 'bg-slate-50',  borderColor: 'border-slate-200', icon: <IconAlertCircle   className="w-5 h-5 text-slate-400" />,   label: 'データなし',     dot: 'bg-slate-300',   glow: false },
+      };
+      const yieldStyles = {
+        danger:  { color: 'text-red-600',     bgColor: 'bg-red-50',    borderColor: 'border-red-500',   icon: <IconAlertTriangle className="w-5 h-5 text-red-600" />,   label: '低利回り (<4%)', dot: 'bg-red-500',     glow: true  },
+        warning: { color: 'text-yellow-600',  bgColor: 'bg-yellow-50', borderColor: 'border-yellow-400',icon: <IconAlertCircle   className="w-5 h-5 text-yellow-600" />,  label: '注意 (4-6.9%)', dot: 'bg-yellow-400',  glow: false },
+        safe:    { color: 'text-blue-600',    bgColor: 'bg-blue-50',   borderColor: 'border-blue-300',  icon: <IconCheckCircle   className="w-5 h-5 text-blue-500" />,   label: '高利回り (7%+)', dot: 'bg-blue-500',    glow: false },
+        unknown: { color: 'text-slate-400',   bgColor: 'bg-slate-50',  borderColor: 'border-slate-200', icon: <IconAlertCircle   className="w-5 h-5 text-slate-400" />,   label: 'データなし',     dot: 'bg-slate-300',   glow: false },
+      };
+      const statusStyles = viewMode === 'yield' ? yieldStyles : occupancyStyles;
+      const getEffectiveStatus = (b) => viewMode === 'yield' ? (b.yieldStatus || 'unknown') : (b.status || 'unknown');
+
+      if (loading) {
+        return (
+          <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+            <div className="text-center">
+              <IconRefresh className="w-10 h-10 text-blue-500 mx-auto mb-3 animate-spin" />
+              <p className="text-slate-600 font-medium">データを読み込んでいます…</p>
+            </div>
+          </div>
+        );
+      }
+
+      const dangerLabel   = viewMode === 'yield' ? '低利回り (<5%)' : '危険 (<70%)';
+      const warningLabel  = viewMode === 'yield' ? '注意 (5-7.9%)'  : '注意 (70-89%)';
+      const safeLabel     = viewMode === 'yield' ? '高利回り (8%+)' : '順調 (90%+)';
+
+      const getFilterTitle = () => {
+          if (filter === 'compound') return '複合リスク物件（稼働率・利回り ともに要注意）';
+          if (filter === 'all')     return '全ビル一覧（取得順）';
+          if (filter === 'danger')  return viewMode === 'yield' ? '低利回り物件一覧' : '要注意ビル一覧';
+          if (filter === 'warning') return '警戒ビル一覧';
+          if (filter === 'safe')    return viewMode === 'yield' ? '高利回り物件一覧' : '順調ビル一覧';
+          if (filter === 'unknown') return 'データなし・計算対象外ビル一覧';
+          return '';
+      };
+
+      return (
+      <React.Fragment>
+        <div className="min-h-screen bg-slate-100 text-slate-800 p-4 font-sans">
+          <div className="max-w-7xl mx-auto space-y-6">
+
+            <header className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <IconBuilding className="w-6 h-6 text-blue-600" />
+                    ビジネスシグナル | 物件
+                    {data?.isSample && (
+                      <span className="text-xs font-bold bg-blue-100 text-blue-600 border border-blue-300 px-2 py-0.5 rounded-full ml-1">SAMPLE</span>
+                    )}
+                  </h1>
+                  <p className="text-slate-500 mt-1 text-sm">
+                    {data ? `${data.fileName}（${counts.total}棟）` : 'データがまだありません。'}
+                  </p>
+
+                  {/* モード切替トグル */}
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
+                    <div className="flex bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                      <button
+                        onClick={() => { setViewMode('occupancy'); setFilter('all'); }}
+                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${viewMode === 'occupancy' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        📊 稼働率
+                      </button>
+                      <button
+                        onClick={() => { setViewMode('yield'); setFilter('all'); }}
+                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${viewMode === 'yield' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        💰 利回り
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => counts.compound > 0 && setFilter(filter === 'compound' ? 'all' : 'compound')}
+                      className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors flex items-center gap-1.5 ${filter === 'compound' ? 'bg-red-600 text-white border-red-600' : counts.compound > 0 ? 'bg-white text-red-600 border-red-300 hover:bg-red-50' : 'bg-white text-slate-300 border-slate-200 cursor-default'}`}
+                    >
+                      <span className={`w-2 h-2 rounded-full inline-block ${counts.compound > 0 ? 'bg-red-400 animate-pulse' : 'bg-slate-300'}`}></span>
+                      複合リスク {counts.compound}棟
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  {data && (
+                    <div className="text-right">
+                      <p className="text-sm text-slate-500">最終更新</p>
+                      <p className="font-medium">{data.updatedAt}</p>
+                    </div>
+                  )}
+                  <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileChange} />
+                  <button
+                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                    disabled={uploading}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <IconUpload className={`w-4 h-4 ${uploading ? 'animate-spin' : ''}`} />
+                    {uploading ? 'アップロード中…' : 'Excelをアップロード'}
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {error && (
+              <div className="bg-red-50 border border-red-300 text-red-700 rounded-xl p-4 flex items-center gap-2">
+                <IconAlertTriangle className="w-5 h-5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {uploadMsg && (
+              <div className={`rounded-xl p-4 flex items-center justify-between gap-2 ${uploadMsg.type === 'success' ? 'bg-emerald-50 border border-emerald-300 text-emerald-700' : 'bg-red-50 border border-red-300 text-red-700'}`}>
+                <div className="flex items-center gap-2">
+                  {uploadMsg.type === 'success' ? <IconCheckCircle className="w-5 h-5 shrink-0" /> : <IconAlertTriangle className="w-5 h-5 shrink-0" />}
+                  <span>{uploadMsg.text}</span>
+                </div>
+                <button onClick={() => setUploadMsg(null)} className="opacity-60 hover:opacity-100 transition-opacity shrink-0">
+                  <IconX className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {data && (
+              <>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600" aria-label="信号の判定条件">
+                  <p className="font-bold text-slate-800 text-xs mb-3">赤・黄・緑の条件（「稼働率 / 利回り」切替で表示中の指標1つの色がカードに出ます。複合リスクは2軸の条件を併用）</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs leading-relaxed">
+                    <div>
+                      <p className="font-semibold text-slate-800 mb-1.5">📊 稼働率</p>
+                      <p><span className="text-red-700 font-medium">危険(赤)</span>：未満 70%</p>
+                      <p><span className="text-amber-700 font-medium">注意(黄)</span>：70% 以上 90% 未満</p>
+                      <p><span className="text-emerald-700 font-medium">順調(緑)</span>：90% 以上</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-800 mb-1.5">💰 利回り</p>
+                      <p><span className="text-red-700 font-medium">低利回り(赤)</span>：未満 4%</p>
+                      <p><span className="text-amber-700 font-medium">注意(黄)</span>：4% 以上 7% 未満</p>
+                      <p><span className="text-blue-700 font-medium">高利回り(青)</span>：7% 以上</p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-3 border-t border-slate-200 pt-2">複合リスク：稼働率が「危険」かつ利回りが「低利回り」の物件（データ上の判定と一致）</p>
+                </div>
+                {/* サマリーカード */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div onClick={() => setFilter('all')} className={`p-4 rounded-xl border cursor-pointer transition-all ${filter === 'all' ? 'bg-blue-50 border-blue-400 shadow-md ring-2 ring-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50 shadow-sm'}`}>
+                    <p className="text-sm font-medium text-slate-500 mb-1">管理物件総数</p>
+                    <div className="flex items-end gap-2">
+                      <span className="text-3xl font-bold text-slate-800">{counts.total}</span>
+                      <span className="text-slate-500 mb-1">棟</span>
+                    </div>
+                  </div>
+                  <div onClick={() => setFilter('danger')} className={`p-4 rounded-xl border cursor-pointer transition-all ${filter === 'danger' ? 'bg-red-50 border-red-500 shadow-md ring-2 ring-red-200' : 'bg-white border-slate-200 hover:bg-red-50 shadow-sm'}`}>
+                    <p className="text-sm font-medium text-red-600 mb-1 flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse inline-block"></span>
+                      {viewMode === 'yield' ? '低利回り (<4%)' : '危険 (<70%)'}
+                    </p>
+                    <div className="flex items-end gap-2">
+                      <span className="text-3xl font-bold text-red-600">{counts.danger}</span>
+                      <span className="text-red-400 mb-1">棟</span>
+                    </div>
+                  </div>
+                  <div onClick={() => setFilter('warning')} className={`p-4 rounded-xl border cursor-pointer transition-all ${filter === 'warning' ? 'bg-yellow-50 border-yellow-500 shadow-md ring-2 ring-yellow-200' : 'bg-white border-slate-200 hover:bg-yellow-50 shadow-sm'}`}>
+                    <p className="text-sm font-medium text-yellow-600 mb-1 flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block"></span>
+                      {viewMode === 'yield' ? '注意 (4-6.9%)' : '注意 (70-89%)'}
+                    </p>
+                    <div className="flex items-end gap-2">
+                      <span className="text-3xl font-bold text-yellow-600">{counts.warning}</span>
+                      <span className="text-yellow-500 mb-1">棟</span>
+                    </div>
+                  </div>
+                  <div onClick={() => setFilter('safe')} className={`p-4 rounded-xl border cursor-pointer transition-all ${filter === 'safe' ? (viewMode === 'yield' ? 'bg-blue-50 border-blue-500 shadow-md ring-2 ring-blue-200' : 'bg-emerald-50 border-emerald-500 shadow-md ring-2 ring-emerald-200') : (viewMode === 'yield' ? 'bg-white border-slate-200 hover:bg-blue-50 shadow-sm' : 'bg-white border-slate-200 hover:bg-emerald-50 shadow-sm')}`}>
+                    <p className={`text-sm font-medium mb-1 flex items-center gap-1 ${viewMode === 'yield' ? 'text-blue-600' : 'text-emerald-600'}`}>
+                      <span className={`w-2.5 h-2.5 rounded-full inline-block ${viewMode === 'yield' ? 'bg-blue-500' : 'bg-emerald-500'}`}></span>
+                      {viewMode === 'yield' ? '高利回り (7%+)' : '順調 (90%+)'}
+                    </p>
+                    <div className="flex items-end gap-2">
+                      <span className={`text-3xl font-bold ${viewMode === 'yield' ? 'text-blue-600' : 'text-emerald-600'}`}>{counts.safe}</span>
+                      <span className={`mb-1 ${viewMode === 'yield' ? 'text-blue-500' : 'text-emerald-500'}`}>棟</span>
+                    </div>
+                  </div>
+                  <div onClick={() => setFilter('unknown')} className={`p-4 rounded-xl border cursor-pointer transition-all ${filter === 'unknown' ? 'bg-slate-100 border-slate-400 shadow-md ring-2 ring-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 shadow-sm'}`}>
+                    <p className="text-sm font-medium text-slate-500 mb-1 flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block"></span>データなし
+                    </p>
+                    <div className="flex items-end gap-2">
+                      <span className="text-3xl font-bold text-slate-600">{counts.unknown}</span>
+                      <span className="text-slate-400 mb-1">棟</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* カードグリッド（複合リスク時は専用モーダルに任せ、ここは非表示） */}
+                {filter !== 'compound' && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                  <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+                    <h2 className="text-lg font-bold flex items-center gap-2">
+                      {filter === 'danger'   && <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse inline-block"></span>}
+                      {filter === 'warning'  && <span className="w-3 h-3 rounded-full bg-yellow-400 inline-block"></span>}
+                      {filter === 'safe'     && <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>}
+                      {filter === 'unknown'  && <span className="w-3 h-3 rounded-full bg-slate-300 inline-block"></span>}
+                      {filter === 'all'      && <IconTrendingUp className="w-6 h-6 text-slate-500 shrink-0" />}
+                      {getFilterTitle()}
+                      <span className="text-slate-400 text-sm font-normal ml-2">({filteredBuildings.length}件)</span>
+                    </h2>
+                    <div className="hidden lg:flex items-center gap-5 text-sm font-semibold text-slate-600">
+                      <span className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-full bg-red-500 inline-block shrink-0"></span>{viewMode === 'yield' ? '低利回り' : '危険'}</span>
+                      <span className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-full bg-yellow-400 inline-block shrink-0"></span>注意</span>
+                      <span className="flex items-center gap-2"><span className={`w-3.5 h-3.5 rounded-full inline-block shrink-0 ${viewMode === 'yield' ? 'bg-blue-500' : 'bg-emerald-500'}`}></span>{viewMode === 'yield' ? '高利回り' : '順調'}</span>
+                      <span className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-full bg-slate-300 inline-block shrink-0"></span>データなし</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    {filteredBuildings.map((building) => (
+                      <BuildingCard
+                        key={building.id}
+                        building={building}
+                        style={statusStyles[getEffectiveStatus(building)] || statusStyles.unknown}
+                        onSelect={setSelectedBuilding}
+                        viewMode={viewMode}
+                      />
+                    ))}
+                  </div>
+
+                  {filteredBuildings.length === 0 && (
+                    <div className="text-center py-12 text-slate-400">該当するビルはありません。</div>
+                  )}
+                </div>
+                )}
+              </>
+            )}
+
+          </div>
+        </div>
+
+        {data && filter === 'compound' && (
+          <CompoundRiskModal
+            buildings={filteredBuildings}
+            onClose={() => setFilter('all')}
+            onSelectDetail={(b, mode) => {
+              setViewMode(mode);
+              setSelectedBuilding(b);
+            }}
+          />
+        )}
+
+        <BuildingModal
+          building={selectedBuilding}
+          style={selectedBuilding ? (statusStyles[getEffectiveStatus(selectedBuilding)] || statusStyles.unknown) : null}
+          onClose={() => setSelectedBuilding(null)}
+          viewMode={viewMode}
+          onViewModeChange={(m) => { setViewMode(m); setFilter('all'); }}
+        />
+      </React.Fragment>
+      );
+    }
+
+    (function mount() {
+      const el = document.getElementById('root');
+      if (!el) return;
+      try {
+        const app = <App />;
+        if (typeof ReactDOM.createRoot === 'function') {
+          ReactDOM.createRoot(el).render(app);
+        } else if (typeof ReactDOM.render === 'function') {
+          ReactDOM.render(app, el);
+        } else {
+          el.innerHTML = '<p style="padding:1rem;font-family:sans-serif">ReactDOM が利用できません。react / react-dom の読み込みを確認してください。</p>';
+        }
+      } catch (err) {
+        el.innerHTML = '<p style="padding:1rem;font-family:sans-serif;color:#b91c1c">表示エラー: ' + String(err && err.message ? err.message : err) + '</p>';
+        console.error(err);
+      }
+    })();
+  </script>
+</body>
+</html>
