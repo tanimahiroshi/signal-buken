@@ -823,10 +823,10 @@
         <div className="min-h-screen bg-slate-100 text-slate-800 p-4 font-sans">
           <div className="max-w-7xl mx-auto space-y-6">
 
-            <header className="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200">
+            <header className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div>
-                  <h1 className="text-lg md:text-2xl font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                  <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                     <IconBuilding className="w-6 h-6 text-blue-600" />
                     ビジネスシグナル | 物件
                     {data?.isSample && (
@@ -904,24 +904,6 @@
 
             {data && (
               <>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600" aria-label="信号の判定条件">
-                  <p className="font-bold text-slate-800 text-xs mb-3">赤・黄・緑の条件（「稼働率 / 利回り」切替で表示中の指標1つの色がカードに出ます。複合リスクは2軸の条件を併用）</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs leading-relaxed">
-                    <div>
-                      <p className="font-semibold text-slate-800 mb-1.5">📊 稼働率</p>
-                      <p><span className="text-red-700 font-medium">危険(赤)</span>：未満 70%</p>
-                      <p><span className="text-amber-700 font-medium">注意(黄)</span>：70% 以上 90% 未満</p>
-                      <p><span className="text-emerald-700 font-medium">順調(緑)</span>：90% 以上</p>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-800 mb-1.5">💰 利回り</p>
-                      <p><span className="text-red-700 font-medium">低利回り(赤)</span>：未満 4%</p>
-                      <p><span className="text-amber-700 font-medium">注意(黄)</span>：4% 以上 7% 未満</p>
-                      <p><span className="text-blue-700 font-medium">高利回り(青)</span>：7% 以上</p>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-3 border-t border-slate-200 pt-2">複合リスク：稼働率が「危険」かつ利回りが「低利回り」の物件（データ上の判定と一致）</p>
-                </div>
                 {/* サマリーカード */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div onClick={() => setFilter('all')} className={`p-4 rounded-xl border cursor-pointer transition-all ${filter === 'all' ? 'bg-blue-50 border-blue-400 shadow-md ring-2 ring-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50 shadow-sm'}`}>
@@ -970,6 +952,21 @@
                       <span className="text-slate-400 mb-1">棟</span>
                     </div>
                   </div>
+                </div>
+
+                {/* 判定基準バー */}
+                <div className="flex items-center gap-2 flex-wrap bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm">
+                  <span className="font-bold text-slate-800 whitespace-nowrap">判定基準</span>
+                  <span className="text-slate-400">—</span>
+                  {viewMode === 'occupancy' ? <>
+                    <span className="text-red-500 font-semibold">● 赤: 70%未満</span>
+                    <span className="text-amber-500 font-semibold">● 黄: 70〜89%</span>
+                    <span className="text-emerald-500 font-semibold">● 緑: 90%以上</span>
+                  </> : <>
+                    <span className="text-red-500 font-semibold">● 赤: 4%未満</span>
+                    <span className="text-amber-500 font-semibold">● 黄: 4〜6.9%</span>
+                    <span className="text-blue-500 font-semibold">● 青: 7%以上</span>
+                  </>}
                 </div>
 
                 {/* カードグリッド（複合リスク時は専用モーダルに任せ、ここは非表示） */}
